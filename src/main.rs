@@ -1,9 +1,11 @@
 use std::time::Duration;
 
 use clap::Parser;
-use info::get_info_map;
+use info::*;
 
 use colored::*;
+
+use pid::get_pid;
 
 mod error;
 mod info;
@@ -17,9 +19,18 @@ struct Cli {
 fn main() -> std::io::Result<()> {
     let args = Cli::parse();
     let mut past_info = String::new();
+    let (info_proc, p) = get_pid(&args);
+    let pid;
+    match p {
+        Ok(x) => pid = x,
+        Err(e) => {
+            eprint!("{}", e);
+            std::process::exit(1);
+        }
+    }
 
     loop {
-        let output = get_info_map(&args);
+        let output = get_info_map(&pid);
         let info;
         match output {
             Ok(out) => {
@@ -34,9 +45,11 @@ fn main() -> std::io::Result<()> {
             break;
         }
         if past_info.is_empty() == true {
+            println!("{}", info_proc);
             println!("{}", info);
         } else {
             if past_info.ne(&info) {
+                println!("{}", info_proc);
                 for diff in diff::lines(&past_info, &info) {
                     match diff {
                         diff::Result::Left(l) => println!("{}{}", "-".red(), l.red()),
@@ -46,10 +59,8 @@ fn main() -> std::io::Result<()> {
                 }
             }
         }
-
         past_info = info;
         std::thread::sleep(Duration::from_secs(5));
     }
-
     Ok(())
 }

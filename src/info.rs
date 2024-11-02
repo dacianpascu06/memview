@@ -3,7 +3,6 @@ use std::io::{BufRead, BufReader};
 
 use crate::error::InfoErr;
 use crate::pid::get_proc_maps_file;
-use crate::Cli;
 
 const LENGTH_NO_PATH: usize = 5;
 const LENGTH_WITH_PATH: usize = 6;
@@ -28,14 +27,14 @@ fn get_page_size() -> Result<u64, InfoErr> {
     Ok(page_size as u64)
 }
 
-pub fn get_info_map(args: &Cli) -> Result<String, InfoErr> {
+pub fn get_info_map(pid: &sysinfo::Pid) -> Result<String, InfoErr> {
     let file: File;
-    let (info_process, f) = get_proc_maps_file(args);
+    let f = get_proc_maps_file(&pid);
     match f {
         Ok(x) => file = x,
         Err(e) => {
             eprintln!("{}", e);
-            std::process::exit(1); // Exit the program if there's an error
+            std::process::exit(1);
         }
     }
 
@@ -83,8 +82,6 @@ pub fn get_info_map(args: &Cli) -> Result<String, InfoErr> {
     }
     if formatted_output.is_empty() {
         return Err(InfoErr::OutputErr);
-    } else {
-        formatted_output.insert_str(0, &info_process);
     }
     Ok(formatted_output)
 }

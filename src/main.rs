@@ -4,9 +4,9 @@ use clap::{Parser, Subcommand};
 use info::*;
 
 use app::run;
-use pid::*;
 
 mod app;
+mod args;
 mod error;
 mod info;
 mod pid;
@@ -19,36 +19,7 @@ struct Cli {
 }
 
 fn main() -> std::io::Result<()> {
-    let args = Cli::parse();
-    let pid;
-    let (info_proc, p);
-
-    match args.process_name {
-        Some(name) => {
-            (info_proc, p) = get_pid(name);
-            match p {
-                Ok(x) => pid = x,
-                Err(e) => {
-                    eprint!("{}", e);
-                    std::process::exit(1);
-                }
-            }
-        }
-        None => match args.process_pid {
-            None => {
-                eprintln!("No arguments were given");
-                eprintln!("Usage: ");
-                eprintln!("bpmap -n (process_name)");
-                eprintln!("bpmap (process_pid)");
-                std::process::exit(1);
-            }
-            Some(p) => {
-                pid = p;
-                info_proc = get_name(&pid);
-            }
-        },
-    }
-
+    let (info_proc, pid) = args::parser();
     run(info_proc, pid);
     Ok(())
 }

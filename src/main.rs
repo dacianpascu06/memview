@@ -1,66 +1,54 @@
-use std::time::Duration;
+#[allow(unused_imports)]
+use clap::{Parser, Subcommand};
 
-use clap::Parser;
 use info::*;
 
-use colored::*;
+use app::run;
+use pid::*;
 
-use pid::get_pid;
-
+mod app;
 mod error;
 mod info;
 mod pid;
 
 #[derive(Parser)]
 struct Cli {
-    process_name: String,
+    process_pid: Option<sysinfo::Pid>,
+    #[clap(short = 'n', long = "name")]
+    process_name: Option<String>,
 }
 
 fn main() -> std::io::Result<()> {
     let args = Cli::parse();
-    let mut past_info = String::new();
-    let (info_proc, p) = get_pid(&args);
     let pid;
-    match p {
-        Ok(x) => pid = x,
-        Err(e) => {
-            eprint!("{}", e);
-            std::process::exit(1);
-        }
-    }
+    let (info_proc, p);
 
-    loop {
-        let output = get_info_map(&pid);
-        let info;
-        match output {
-            Ok(out) => {
-                info = out;
-            }
-            Err(e) => {
-                eprintln!("{}", e);
-                std::process::exit(1);
-            }
-        }
-        if info.is_empty() {
-            break;
-        }
-        if past_info.is_empty() == true {
-            println!("{}", info_proc);
-            println!("{}", info);
-        } else {
-            if past_info.ne(&info) {
-                println!("{}", info_proc);
-                for diff in diff::lines(&past_info, &info) {
-                    match diff {
-                        diff::Result::Left(l) => println!("{}{}", "-".red(), l.red()),
-                        diff::Result::Both(l, _) => println!(" {}", l.bright_white()),
-                        diff::Result::Right(r) => println!("{}{}", "+".green(), r.green()),
-                    }
+    match args.process_name {
+        Some(name) => {
+            (info_proc, p) = get_pid(name);
+            match p {
+                Ok(x) => pid = x,
+                Err(e) => {
+                    eprint!("{}", e);
+                    std::process::exit(1);
                 }
             }
         }
-        past_info = info;
-        std::thread::sleep(Duration::from_secs(5));
+        None => match args.process_pid {
+            None => {
+                eprintln!("No arguments were given");
+                eprintln!("Usage: ");
+                eprintln!("bpmap -n (process_name)");
+                eprintln!("bpmap (process_pid)");
+                std::process::exit(1);
+            }
+            Some(p) => {
+                pid = p;
+                info_proc = get_name(&pid);
+            }
+        },
     }
+
+    run(info_proc, pid);
     Ok(())
 }

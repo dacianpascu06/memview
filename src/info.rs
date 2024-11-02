@@ -29,6 +29,7 @@ fn get_page_size() -> Result<u64, InfoErr> {
 
 pub fn get_info_map(pid: &sysinfo::Pid) -> Result<String, InfoErr> {
     let file: File;
+    let mut total_size: u64 = 0;
     let f = get_proc_maps_file(&pid);
     match f {
         Ok(x) => file = x,
@@ -53,6 +54,8 @@ pub fn get_info_map(pid: &sysinfo::Pid) -> Result<String, InfoErr> {
         let end_addr_u64 = u64::from_str_radix(end_addr, 16).expect("invalid address");
         let rounded_dif = ((end_addr_u64 - start_addr_u64 + page_size - 1) / page_size) * page_size;
 
+        total_size = total_size + rounded_dif;
+
         let address_string =
             u64::from_str_radix(start_addr, 16).map_err(|_| InfoErr::AddrFmtErr)?;
 
@@ -72,7 +75,7 @@ pub fn get_info_map(pid: &sysinfo::Pid) -> Result<String, InfoErr> {
         }
 
         let formatted_line = format!(
-            "{:<18} {:>6} {:>4}  {:>6}\n",
+            "{:0>16x} {:>6} {:>4}  {:>6}\n",
             address_string,
             format_byte_size(rounded_dif),
             parts[INDEX_PERMISSION],
@@ -83,5 +86,9 @@ pub fn get_info_map(pid: &sysinfo::Pid) -> Result<String, InfoErr> {
     if formatted_output.is_empty() {
         return Err(InfoErr::OutputErr);
     }
+    total_size = ((total_size + page_size - 1) / page_size) * page_size;
+    let formatted_line_size = format!("{:<16} {:>6} \n", "total", format_byte_size(total_size),);
+
+    formatted_output.push_str(&formatted_line_size);
     Ok(formatted_output)
 }

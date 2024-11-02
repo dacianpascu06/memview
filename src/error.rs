@@ -2,7 +2,7 @@ use thiserror::Error;
 
 #[derive(Error, Debug)]
 pub enum FileErr {
-    #[error("Process doesn't exist")]
+    #[error("Process doesn't exist!")]
     ProcessErr,
 }
 

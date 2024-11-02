@@ -30,8 +30,9 @@ fn get_page_size() -> Result<u64, InfoErr> {
 
 pub fn get_info_map(args: &Cli) -> Result<String, InfoErr> {
     let file: File;
-    match get_proc_maps_file(args) {
-        Ok(file_value) => file = file_value,
+    let (info_process, f) = get_proc_maps_file(args);
+    match f {
+        Ok(x) => file = x,
         Err(e) => {
             eprintln!("{}", e);
             std::process::exit(1); // Exit the program if there's an error
@@ -82,6 +83,8 @@ pub fn get_info_map(args: &Cli) -> Result<String, InfoErr> {
     }
     if formatted_output.is_empty() {
         return Err(InfoErr::OutputErr);
+    } else {
+        formatted_output.insert_str(0, &info_process);
     }
     Ok(formatted_output)
 }

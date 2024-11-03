@@ -4,8 +4,9 @@ use std::time::Duration;
 
 pub fn run(info_process: String, pid: sysinfo::Pid) {
     let mut past_info = String::new();
+    let mut info_all = InfoAll::new();
     loop {
-        let output = get_info_map(&pid);
+        let output = get_info_map(&mut info_all, &pid);
         let info;
         match output {
             Ok(out) => {
@@ -35,6 +36,6 @@ pub fn run(info_process: String, pid: sysinfo::Pid) {
             }
         }
         past_info = info;
-        std::thread::sleep(Duration::from_secs(5));
+        std::thread::sleep(Duration::from_secs(2));
     }
 }

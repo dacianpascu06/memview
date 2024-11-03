@@ -1,6 +1,7 @@
 use std::fs::File;
 use std::io::{BufRead, BufReader};
 
+use crate::aux::*;
 use crate::error::InfoErr;
 use crate::pid::get_proc_maps_file;
 
@@ -10,24 +11,84 @@ const INDEX_PERMISSION: usize = 1;
 const INDEX_ADDRESS: usize = 0;
 const INDEX_PATH: usize = 5;
 
-fn format_byte_size(size: u64) -> String {
-    const KB: u64 = 1024;
-    if size < KB {
-        format!("{} B", size)
-    } else {
-        format!("{}KB", size as f64 / KB as f64)
+#[derive(Debug)]
+pub struct InfoAll {
+    memory_map: Vec<InfoMemoryMap>,
+    count: usize,
+}
+impl InfoAll {
+    pub fn new() -> Self {
+        InfoAll {
+            memory_map: Vec::new(),
+            count: 0,
+        }
     }
 }
 
-fn get_page_size() -> Result<u64, InfoErr> {
-    let page_size = unsafe { libc::sysconf(libc::_SC_PAGESIZE) };
-    if page_size == -1 {
-        return Err(InfoErr::PageErr);
+impl std::fmt::Display for InfoAll {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        for map in self.memory_map.iter() {
+            write!(f, "{}", map)?;
+        }
+        Ok(())
     }
-    Ok(page_size as u64)
 }
 
-pub fn get_info_map(pid: &sysinfo::Pid) -> Result<String, InfoErr> {
+#[derive(Debug, PartialEq, Eq)]
+pub struct InfoMemoryMap {
+    memory_segments: Vec<InfoMemorySegment>,
+    count: usize,
+    size_total: String,
+}
+
+impl InfoMemoryMap {
+    pub fn new() -> Self {
+        InfoMemoryMap {
+            memory_segments: Vec::new(),
+            count: 0,
+            size_total: String::new(),
+        }
+    }
+}
+impl std::fmt::Display for InfoMemoryMap {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.size_total)?;
+        for segment in self.memory_segments.iter() {
+            write!(f, "{}", segment)?;
+        }
+        Ok(())
+    }
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub struct InfoMemorySegment {
+    address: u64,
+    size: String,
+    permissions: String,
+    path: String,
+}
+
+impl InfoMemorySegment {
+    pub fn new(address: u64, size: String, permissions: String, path: String) -> Self {
+        InfoMemorySegment {
+            address,
+            size,
+            permissions,
+            path,
+        }
+    }
+}
+impl std::fmt::Display for InfoMemorySegment {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let formatted_output = format!(
+            "{:0>16x} {:>6} {:>4}  {:>6}\n",
+            self.address, self.size, self.permissions, self.path,
+        );
+        write!(f, "{}", formatted_output)
+    }
+}
+
+pub fn get_info_map(info_all: &mut InfoAll, pid: &sysinfo::Pid) -> Result<String, InfoErr> {
     let file: File;
     let mut total_size: u64 = 0;
     let f = get_proc_maps_file(&pid);
@@ -38,10 +99,14 @@ pub fn get_info_map(pid: &sysinfo::Pid) -> Result<String, InfoErr> {
             std::process::exit(1);
         }
     }
-
     let reader = BufReader::new(file);
     let page_size = get_page_size()?;
     let mut formatted_output = String::new();
+
+    info_all.memory_map.push(InfoMemoryMap::new());
+    let curr_map = &mut info_all.memory_map[info_all.count];
+    curr_map.count = 0;
+    info_all.count += 1;
 
     for line in reader.lines() {
         let line = line.map_err(|_| InfoErr::LineErr)?;
@@ -56,11 +121,11 @@ pub fn get_info_map(pid: &sysinfo::Pid) -> Result<String, InfoErr> {
 
         total_size = total_size + rounded_dif;
 
-        let address_string =
-            u64::from_str_radix(start_addr, 16).map_err(|_| InfoErr::AddrFmtErr)?;
+        let address = u64::from_str_radix(start_addr, 16).map_err(|_| InfoErr::AddrFmtErr)?;
 
         let mut path: String = String::new();
 
+        // if the memory segment has a path that it is not mapped anonymous
         if parts.len() == LENGTH_WITH_PATH {
             path = {
                 if parts[INDEX_PATH].starts_with("/") {
@@ -76,19 +141,39 @@ pub fn get_info_map(pid: &sysinfo::Pid) -> Result<String, InfoErr> {
 
         let formatted_line = format!(
             "{:0>16x} {:>6} {:>4}  {:>6}\n",
-            address_string,
+            address,
             format_byte_size(rounded_dif),
             parts[INDEX_PERMISSION],
             path,
         );
+
+        // add the current memory_segment to the memory_map
+        let memory_segment = InfoMemorySegment::new(
+            address,
+            format_byte_size(rounded_dif),
+            parts[INDEX_PERMISSION].to_string(),
+            path,
+        );
+        curr_map.memory_segments.push(memory_segment);
+        curr_map.count += 1;
+
         formatted_output.push_str(&formatted_line);
     }
     if formatted_output.is_empty() {
         return Err(InfoErr::OutputErr);
     }
+
     total_size = ((total_size + page_size - 1) / page_size) * page_size;
     let formatted_line_size = format!("{:<16} {:>6} \n", "total", format_byte_size(total_size),);
-
     formatted_output.push_str(&formatted_line_size);
+    curr_map.size_total = formatted_line_size;
+    if info_all.count > 1 {
+        let (prev_map, curr_map) = info_all.memory_map.split_at(info_all.count - 1);
+        if prev_map == curr_map {
+            info_all.memory_map.remove(info_all.count - 1);
+            info_all.count -= 1;
+        }
+    }
+
     Ok(formatted_output)
 }

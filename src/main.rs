@@ -7,6 +7,7 @@ use app::run;
 
 mod app;
 mod args;
+mod aux;
 mod error;
 mod info;
 mod pid;

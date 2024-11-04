@@ -3,8 +3,6 @@ use crate::error::FileErr;
 use std::ffi::OsStr;
 use std::fs::File;
 
-use colored::*;
-
 use sysinfo::System;
 
 pub fn get_pid(p_name: String) -> (String, Result<sysinfo::Pid, FileErr>) {
@@ -53,11 +51,11 @@ pub fn get_name(pid: &sysinfo::Pid) -> String {
             }
         }
         format!(
-            "{:<18} {:>6} {:<4}  {:>6}",
-            "Process name".bright_white(),
-            process_name.purple(),
-            "pid".bright_white(),
-            process.pid().to_string().purple(),
+            "{} {} {} {}",
+            "Process name ".to_string(),
+            process_name.to_string(),
+            " pid ".to_string(),
+            process.pid().to_string(),
         )
     } else {
         eprintln!("Process doesn't exist!");

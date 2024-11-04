@@ -6,10 +6,10 @@ use crate::error::InfoErr;
 use crate::pid::get_proc_maps_file;
 
 use ratatui::{
-    layout::{Constraint, Direction, Layout},
+    layout::{Alignment, Constraint, Direction, Layout},
     style::Stylize,
     text::{Line, Text},
-    widgets::Paragraph,
+    widgets::{Block, Padding, Paragraph},
     Frame,
 };
 
@@ -43,8 +43,15 @@ impl InfoAll {
     }
 
     pub fn draw_info_map(&self, frame: &mut Frame, index: usize) {
+        //let text = Paragraph::new(self.memory_map[index].to_string()).alignment(Alignment::Center);
         let text = Paragraph::new(self.memory_map[index].to_string())
-            .alignment(ratatui::layout::Alignment::Center);
+            .block(Block::new().padding(Padding::new(
+                frame.area().width / 2 - 18, // left
+                0,                           // right
+                2,                           // top
+                0,                           // bottom
+            )))
+            .alignment(Alignment::Left);
 
         let vertical_chunks = Layout::default()
             .direction(Direction::Vertical)
@@ -70,21 +77,21 @@ impl InfoAll {
                     output_text.push_line(
                         Line::from(format!("{}{}", "-", l))
                             .red()
-                            .alignment(ratatui::layout::Alignment::Center),
+                            .alignment(ratatui::layout::Alignment::Left),
                     );
                 }
                 diff::Result::Both(l, _) => {
                     output_text.push_line(
                         Line::from(format!("{}", l))
                             .white()
-                            .alignment(ratatui::layout::Alignment::Center),
+                            .alignment(ratatui::layout::Alignment::Left),
                     );
                 }
                 diff::Result::Right(r) => {
                     output_text.push_line(
                         Line::from(format!("{}{}", "+", r))
                             .green()
-                            .alignment(ratatui::layout::Alignment::Center),
+                            .alignment(ratatui::layout::Alignment::Left),
                     );
                 }
             }
@@ -98,7 +105,17 @@ impl InfoAll {
                 Constraint::Length(4), // Bottom padding (2 lines)
             ])
             .split(frame.area());
+
         let centered_area = vertical_chunks[1];
+
+        let output_text = Paragraph::new(output_text)
+            .block(Block::new().padding(Padding::new(
+                frame.area().width / 2 - 18, // left
+                0,                           // right
+                2,                           // top
+                0,                           // bottom
+            )))
+            .alignment(Alignment::Left);
 
         //frame.render_widget(Clear, vertical_chunks[1]);
         frame.render_widget(output_text, centered_area);

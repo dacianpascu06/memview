@@ -21,11 +21,11 @@ pub fn get_pid(p_name: String) -> (String, Result<sysinfo::Pid, FileErr>) {
         let process_pid = process.pid().to_string();
 
         ret_string = format!(
-            "{:<18} {:>6} {:<4}  {:>6}",
-            "Process name".bright_white(),
-            process_name.purple(),
-            "pid".bright_white(),
-            process_pid.purple(),
+            "{} {} {} {}",
+            "Process name ".to_string(),
+            process_name.to_string(),
+            " pid ".to_string(),
+            process_pid,
         );
         pid = Some(process.pid());
     }

@@ -5,7 +5,13 @@ use crate::aux::*;
 use crate::error::InfoErr;
 use crate::pid::get_proc_maps_file;
 
-use colored::*;
+use ratatui::{
+    layout::{Constraint, Direction, Layout},
+    style::Stylize,
+    text::{Line, Text},
+    widgets::Paragraph,
+    Frame,
+};
 
 const LENGTH_NO_PATH: usize = 5;
 const LENGTH_WITH_PATH: usize = 6;
@@ -23,26 +29,79 @@ pub enum State {
 pub struct InfoAll {
     memory_map: Vec<InfoMemoryMap>,
     count: usize,
-    process: String,
 }
 impl InfoAll {
-    pub fn new(process: String) -> Self {
+    pub fn new() -> Self {
         InfoAll {
             memory_map: Vec::new(),
             count: 0,
-            process,
         }
     }
-    pub fn print_with_dif(&self) {
-        let prev_map = &self.memory_map[self.count - 2];
-        let curr_map = &self.memory_map[self.count - 1];
+
+    pub fn get_count(&self) -> usize {
+        self.count
+    }
+
+    pub fn draw_info_map(&self, frame: &mut Frame, index: usize) {
+        let text = Paragraph::new(self.memory_map[index].to_string())
+            .alignment(ratatui::layout::Alignment::Center);
+
+        let vertical_chunks = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([
+                Constraint::Length(4), // Top padding (2 lines)
+                Constraint::Min(0),    // Centered area
+                Constraint::Length(4), // Bottom padding (2 lines)
+            ])
+            .split(frame.area());
+
+        let centered_area = vertical_chunks[1];
+        frame.render_widget(text, centered_area);
+    }
+
+    pub fn draw_info_map_with_diff(&self, frame: &mut Frame, index: usize) {
+        let mut output_text: Text = Default::default();
+        let prev_map = &self.memory_map[index - 1];
+        let curr_map = &self.memory_map[index];
+
         for diff in diff::lines(&prev_map.to_string(), &curr_map.to_string()) {
             match diff {
-                diff::Result::Left(l) => println!("{}{}", "-".red(), l.red()),
-                diff::Result::Both(l, _) => println!(" {}", l.bright_white()),
-                diff::Result::Right(r) => println!("{}{}", "+".green(), r.green()),
+                diff::Result::Left(l) => {
+                    output_text.push_line(
+                        Line::from(format!("{}{}", "-", l))
+                            .red()
+                            .alignment(ratatui::layout::Alignment::Center),
+                    );
+                }
+                diff::Result::Both(l, _) => {
+                    output_text.push_line(
+                        Line::from(format!("{}", l))
+                            .white()
+                            .alignment(ratatui::layout::Alignment::Center),
+                    );
+                }
+                diff::Result::Right(r) => {
+                    output_text.push_line(
+                        Line::from(format!("{}{}", "+", r))
+                            .green()
+                            .alignment(ratatui::layout::Alignment::Center),
+                    );
+                }
             }
         }
+
+        let vertical_chunks = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([
+                Constraint::Length(4), // Top padding (2 lines)
+                Constraint::Min(0),    // Centered area
+                Constraint::Length(4), // Bottom padding (2 lines)
+            ])
+            .split(frame.area());
+        let centered_area = vertical_chunks[1];
+
+        //frame.render_widget(Clear, vertical_chunks[1]);
+        frame.render_widget(output_text, centered_area);
     }
 }
 
@@ -60,22 +119,19 @@ pub struct InfoMemoryMap {
     memory_segments: Vec<InfoMemorySegment>,
     count: usize,
     size_total: String,
-    process: String,
 }
 
 impl InfoMemoryMap {
-    pub fn new(process: String) -> Self {
+    pub fn new() -> Self {
         InfoMemoryMap {
             memory_segments: Vec::new(),
             count: 0,
             size_total: String::new(),
-            process,
         }
     }
 }
 impl std::fmt::Display for InfoMemoryMap {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}\n", self.process)?;
         for segment in self.memory_segments.iter() {
             write!(f, "{}", segment)?;
         }
@@ -126,9 +182,7 @@ pub fn get_info_map(info_all: &mut InfoAll, pid: &sysinfo::Pid) -> Result<State,
     let reader = BufReader::new(file);
     let page_size = get_page_size()?;
 
-    info_all
-        .memory_map
-        .push(InfoMemoryMap::new(info_all.process.clone()));
+    info_all.memory_map.push(InfoMemoryMap::new());
 
     let curr_map = &mut info_all.memory_map[info_all.count];
     curr_map.count = 0;
@@ -199,6 +253,6 @@ pub fn get_info_map(info_all: &mut InfoAll, pid: &sysinfo::Pid) -> Result<State,
         // info_count = 1 => init
         Ok(State::Initial)
     } else {
-        Err(InfoErr::OutputErr)
+        Err(InfoErr::StoppedErr)
     }
 }

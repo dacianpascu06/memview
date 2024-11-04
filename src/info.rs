@@ -174,9 +174,8 @@ pub fn get_info_map(info_all: &mut InfoAll, pid: &sysinfo::Pid) -> Result<State,
     let f = get_proc_maps_file(&pid);
     match f {
         Ok(x) => file = x,
-        Err(e) => {
-            eprintln!("{}", e);
-            std::process::exit(1);
+        Err(_) => {
+            return Err(InfoErr::StoppedErr);
         }
     }
     let reader = BufReader::new(file);

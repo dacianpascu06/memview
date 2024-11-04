@@ -35,11 +35,12 @@ pub fn run(info_process: String, pid: sysinfo::Pid) -> std::io::Result<()> {
     let mut info_all = InfoAll::new();
     let mut terminal = ratatui::init();
     terminal.draw(|frame| draw_background(frame, &info_process, 0))?;
+    let mut err = error::InfoErr::None;
     loop {
         let output = get_info_map(&mut info_all, &pid);
         match output {
             Err(e) => {
-                eprintln!("{}", e);
+                err = e;
                 break;
             }
             Ok(state) => match state {
@@ -65,10 +66,15 @@ pub fn run(info_process: String, pid: sysinfo::Pid) -> std::io::Result<()> {
                 }
             }
         }
-
-        std::thread::sleep(Duration::from_secs(5));
+        std::thread::sleep(Duration::from_secs(2));
     }
 
     ratatui::restore();
+
+    match err {
+        error::InfoErr::None => {}
+        _ => eprintln!("{}", err),
+    }
+
     Ok(())
 }

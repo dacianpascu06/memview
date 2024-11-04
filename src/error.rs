@@ -18,4 +18,6 @@ pub enum InfoErr {
     OutputErr,
     #[error("Process has stopped!")]
     StoppedErr,
+    #[error("")]
+    None,
 }

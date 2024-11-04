@@ -21,6 +21,6 @@ struct Cli {
 
 fn main() -> std::io::Result<()> {
     let (info_proc, pid) = args::parser();
-    run(info_proc, pid);
+    run(info_proc, pid)?;
     Ok(())
 }

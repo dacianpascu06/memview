@@ -16,4 +16,6 @@ pub enum InfoErr {
     PageErr,
     #[error("Output is empty!")]
     OutputErr,
+    #[error("Process has stopped!")]
+    StoppedErr,
 }

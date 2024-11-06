@@ -1,3 +1,7 @@
+use ratatui::{
+    style::{Color, Style},
+    text::{Line, Span},
+};
 pub fn format_byte_size(size: u64) -> String {
     const KB: u64 = 1024;
     if size < KB {
@@ -13,4 +17,29 @@ pub fn get_page_size() -> Result<u64, crate::error::InfoErr> {
         return Err(crate::error::InfoErr::PageErr);
     }
     Ok(page_size as u64)
+}
+
+pub fn parse_info_proc(info_process: &String) -> Line<'_> {
+    let info_proc: Vec<String> = info_process
+        .split_whitespace()
+        .map(|s| s.to_string())
+        .collect();
+
+    let out_name = Span::styled(info_proc[0].clone(), Style::default().fg(Color::White));
+    let out_name_2 = Span::styled(info_proc[1].clone(), Style::default().fg(Color::White));
+    let out_name_value = Span::styled(info_proc[2].clone(), Style::default().fg(Color::Red));
+    let out_pid = Span::styled(info_proc[3].clone(), Style::default().fg(Color::White));
+    let out_pid_value = Span::styled(info_proc[4].clone(), Style::default().fg(Color::Red));
+
+    Line::from(vec![
+        out_name,
+        " ".into(),
+        out_name_2,
+        " : ".into(),
+        out_name_value,
+        " ".into(),
+        out_pid,
+        " : ".into(),
+        out_pid_value,
+    ])
 }

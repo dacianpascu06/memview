@@ -1,5 +1,6 @@
 use std::fs::File;
-use std::io::{BufRead, BufReader};
+use std::io;
+use std::io::{BufRead, BufReader, Read, Seek, SeekFrom};
 
 use crate::aux::*;
 use crate::error::InfoErr;
@@ -29,12 +30,14 @@ pub enum State {
 pub struct InfoAll {
     memory_map: Vec<InfoMemoryMap>,
     count: usize,
+    pid: u32,
 }
 impl InfoAll {
-    pub fn new() -> Self {
+    pub fn new(pid: u32) -> Self {
         InfoAll {
             memory_map: Vec::new(),
             count: 0,
+            pid,
         }
     }
 
@@ -43,10 +46,9 @@ impl InfoAll {
     }
 
     pub fn draw_info_map(&self, frame: &mut Frame, index: usize) {
-        //let text = Paragraph::new(self.memory_map[index].to_string()).alignment(Alignment::Center);
         let text = Paragraph::new(self.memory_map[index].to_string())
             .block(Block::new().padding(Padding::new(
-                frame.area().width / 2 - 18, // left
+                frame.area().width / 2 - 24, // left
                 0,                           // right
                 2,                           // top
                 0,                           // bottom
@@ -110,7 +112,7 @@ impl InfoAll {
 
         let output_text = Paragraph::new(output_text)
             .block(Block::new().padding(Padding::new(
-                frame.area().width / 2 - 18, // left
+                frame.area().width / 2 - 24, // left
                 0,                           // right
                 2,                           // top
                 0,                           // bottom
@@ -163,23 +165,31 @@ pub struct InfoMemorySegment {
     size: String,
     permissions: String,
     path: String,
+    physical: u64,
 }
 
 impl InfoMemorySegment {
-    pub fn new(address: u64, size: String, permissions: String, path: String) -> Self {
+    pub fn new(
+        address: u64,
+        size: String,
+        permissions: String,
+        path: String,
+        physical: u64,
+    ) -> Self {
         InfoMemorySegment {
             address,
             size,
             permissions,
             path,
+            physical,
         }
     }
 }
 impl std::fmt::Display for InfoMemorySegment {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let formatted_output = format!(
-            "{:0>16x} {:>6} {:>4}  {:>6}\n",
-            self.address, self.size, self.permissions, self.path,
+            "{:0>16x} {:>14x}  {:>6} {:>4} {:>6}\n",
+            self.address, self.physical, self.size, self.permissions, self.path,
         );
         write!(f, "{}", formatted_output)
     }
@@ -218,7 +228,13 @@ pub fn get_info_map(info_all: &mut InfoAll, pid: &sysinfo::Pid) -> Result<State,
         total_size = total_size + rounded_dif;
 
         let address = u64::from_str_radix(start_addr, 16).map_err(|_| InfoErr::AddrFmtErr)?;
+        let physical_wrap = virt_to_phys(info_all.pid, address, page_size);
 
+        let physical;
+        match physical_wrap {
+            Ok(x) => physical = x,
+            Err(_) => physical = 0,
+        }
         let mut path: String = String::new();
 
         // if the memory segment has a path that it is not mapped anonymous
@@ -241,6 +257,7 @@ pub fn get_info_map(info_all: &mut InfoAll, pid: &sysinfo::Pid) -> Result<State,
             format_byte_size(rounded_dif),
             parts[INDEX_PERMISSION].to_string(),
             path,
+            physical,
         );
         curr_map.memory_segments.push(memory_segment);
         curr_map.count += 1;
@@ -271,4 +288,34 @@ pub fn get_info_map(info_all: &mut InfoAll, pid: &sysinfo::Pid) -> Result<State,
     } else {
         Err(InfoErr::StoppedErr)
     }
+}
+
+fn virt_to_phys(pid: u32, vaddr: u64, page_size: u64) -> io::Result<u64> {
+    let path = format!("/proc/{}/pagemap", pid);
+    let mut pagemap = File::open(path)?;
+
+    const PAGEMAP_ENTRY_SIZE: u64 = 8;
+
+    let vpn = vaddr / page_size;
+    let offset = vpn * PAGEMAP_ENTRY_SIZE;
+
+    pagemap.seek(SeekFrom::Start(offset))?;
+
+    let mut entry = [0u8; 8];
+    pagemap.read_exact(&mut entry)?;
+
+    let entry = u64::from_le_bytes(entry);
+
+    let present = entry & (1 << 63) != 0;
+    if !present {
+        return Err(io::Error::new(
+            io::ErrorKind::Other,
+            "Page not present in memory",
+        ));
+    }
+
+    let pfn = entry & ((1 << 55) - 1);
+
+    let phys_addr = (pfn * page_size as u64) + (vaddr % page_size as u64);
+    Ok(phys_addr)
 }

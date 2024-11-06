@@ -1,11 +1,12 @@
 use super::*;
+use aux::parse_info_proc;
 use std::time::Duration;
 
 use crossterm::event::{self, Event, KeyCode};
 use ratatui::{
-    style::{Color, Style, Stylize},
+    style::Stylize,
     symbols::border,
-    text::{Line, Span, Text},
+    text::{Line, Text},
     widgets::{Block, Paragraph},
     Frame,
 };
@@ -46,33 +47,10 @@ fn draw_background(
 }
 
 pub fn run(info_process: String, pid: sysinfo::Pid) -> std::io::Result<()> {
-    let mut info_all = InfoAll::new();
     let mut terminal = ratatui::init();
 
-    let info_proc: Vec<String> = info_process
-        .split_whitespace()
-        .map(|s| s.to_string())
-        .collect();
-
-    let out_name = Span::styled(info_proc[0].clone(), Style::default().fg(Color::White));
-    let out_name_2 = Span::styled(info_proc[1].clone(), Style::default().fg(Color::White));
-    let out_name_value = Span::styled(info_proc[2].clone(), Style::default().fg(Color::Red));
-    let out_pid = Span::styled(info_proc[3].clone(), Style::default().fg(Color::White));
-    let out_pid_value = Span::styled(info_proc[4].clone(), Style::default().fg(Color::Red));
-
-    let info_process = Line::from(vec![
-        out_name,
-        " ".into(),
-        out_name_2,
-        " : ".into(),
-        out_name_value,
-        " ".into(),
-        out_pid,
-        " : ".into(),
-        out_pid_value,
-    ]);
-
-    terminal.draw(|frame| draw_background(frame, &info_process, 0, 0))?;
+    let info_process = parse_info_proc(&info_process);
+    let mut info_all = InfoAll::new(pid.as_u32());
 
     let mut err = error::InfoErr::None;
     let mut diff: bool = false;
@@ -96,6 +74,7 @@ pub fn run(info_process: String, pid: sysinfo::Pid) -> std::io::Result<()> {
                 State::Changed => {}
             },
         }
+
         if event::poll(Duration::from_millis(100))? {
             if let Event::Key(key) = event::read()? {
                 if key.code == KeyCode::Char('q') {

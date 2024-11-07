@@ -1,174 +1,62 @@
 use super::*;
 use aux::parse_info_proc;
-use std::time::Duration;
 
-use crossterm::event::{self, Event, KeyCode};
-use ratatui::{
-    style::Stylize,
-    symbols::border,
-    text::{Line, Text},
-    widgets::{Block, Paragraph},
-    Frame,
-};
+use std::sync::{Arc, Mutex};
 
-fn draw_background(
-    frame: &mut Frame,
-    process: &ratatui::prelude::Line,
-    total_changes: usize,
-    index: usize,
-) {
-    let title = Line::from(" Enhanced PMAP".bold());
-    let instructions = Line::from(vec![
-        " prev ".into(),
-        "<p> ".blue().bold(),
-        " next ".into(),
-        "<n> ".blue().bold(),
-        " Current/Total : ".white(),
-        format!("{}/", index.to_string()).red(),
-        format!("{}", total_changes.to_string()).red(),
-        " Toggle Diff ".into(),
-        "<d> ".blue().bold(),
-        "  Refresh ".into(),
-        "<r> ".blue().bold(),
-        " Quit ".into(),
-        "<q> ".blue().bold(),
-    ]);
+use crate::ui::background::draw_background;
+use crate::ui::event::event_handler;
 
-    let block = Block::bordered()
-        .title(title.centered())
-        .title_bottom(instructions.centered())
-        .border_set(border::THICK);
-
-    let empty_line = Line::from(vec!["".into()]);
-    let counter_text = Text::from(vec![empty_line, process.clone()]);
-
-    let widget = Paragraph::new(counter_text).centered().block(block);
-    frame.render_widget(widget, frame.area());
-}
-
-pub fn run(info_process: String, pid: sysinfo::Pid) -> std::io::Result<()> {
+pub fn run(info_proc: String, pid: sysinfo::Pid) -> std::io::Result<()> {
     let mut terminal = ratatui::init();
 
-    let info_process = parse_info_proc(&info_process);
-    let mut info_all = InfoAll::new(pid.as_u32());
+    let info_process_clone: &'static str = Box::leak(info_proc.clone().into_boxed_str());
+    let info_process = parse_info_proc(&info_process_clone);
 
-    let mut err = error::InfoErr::None;
-    let mut diff: bool = false;
-    let mut index: usize = 0;
-    loop {
-        let output = get_info_map(&mut info_all, &pid);
-        match output {
-            Err(e) => {
-                err = e;
-                break;
-            }
-            Ok(state) => match state {
-                State::Initial => {
-                    terminal.draw(|frame| {
-                        draw_background(frame, &info_process, 0, 0);
-                        info_all.draw_info_map(frame, 0);
-                        index = 0;
-                    })?;
-                }
-                State::NotChanged => {}
-                State::Changed => {}
-            },
+    let err = error::InfoErr::None;
+    let index: usize = 0;
+
+    let info = Arc::new(Mutex::new(InfoAll::new(pid.as_u32())));
+
+    let info_clone = Arc::clone(&info);
+
+    // spawns thread that refreshes the state
+    std::thread::spawn(move || {
+        refresh(info_clone, pid.clone());
+    });
+
+    // makes sure that one refresh has already occured and the first pmap result is succesful
+    let mut init = false;
+    while init == false {
+        let info_all_clone = Arc::clone(&info);
+        let info_all_guard = info_all_clone.lock();
+        let info_all;
+
+        match info_all_guard {
+            Ok(value) => info_all = value,
+            Err(_) => continue,
         }
 
-        if event::poll(Duration::from_millis(100))? {
-            if let Event::Key(key) = event::read()? {
-                if key.code == KeyCode::Char('q') {
-                    break;
-                }
-                if key.code == KeyCode::Char('n') {
-                    if index == info_all.get_count() - 2 || index == info_all.get_count() - 1 {
-                        index = info_all.get_count() - 1;
-                    }
-                    if diff == false {
-                        terminal.draw(|frame| {
-                            draw_background(frame, &info_process, info_all.get_count() - 1, index);
-                            info_all.draw_info_map(frame, index);
-                        })?;
-                    } else if diff == true {
-                        terminal.draw(|frame| {
-                            draw_background(frame, &info_process, info_all.get_count() - 1, index);
-                            info_all.draw_info_map_with_diff(frame, index);
-                        })?;
-                    }
-                }
-                if key.code == KeyCode::Char('p') {
-                    if index == 0 || index == 1 {
-                        terminal.draw(|frame| {
-                            index = 0;
-                            draw_background(frame, &info_process, info_all.get_count() - 1, index);
-                            info_all.draw_info_map(frame, index);
-                        })?;
-                    } else {
-                        index -= 1;
-                        if diff == false {
-                            terminal.draw(|frame| {
-                                draw_background(
-                                    frame,
-                                    &info_process,
-                                    info_all.get_count() - 1,
-                                    index,
-                                );
-                                info_all.draw_info_map(frame, index);
-                            })?;
-                        } else {
-                            terminal.draw(|frame| {
-                                draw_background(
-                                    frame,
-                                    &info_process,
-                                    info_all.get_count() - 1,
-                                    index,
-                                );
-                                info_all.draw_info_map_with_diff(frame, index);
-                            })?;
-                        }
-                    }
-                }
-                if key.code == KeyCode::Char('r') {
-                    if index == 0 {
-                        terminal.draw(|frame| {
-                            draw_background(frame, &info_process, info_all.get_count() - 1, index);
-                            info_all.draw_info_map(frame, index);
-                        })?;
-                    } else if diff == false {
-                        terminal.draw(|frame| {
-                            draw_background(frame, &info_process, info_all.get_count() - 1, index);
-                            info_all.draw_info_map(frame, index);
-                        })?;
-                    } else {
-                        terminal.draw(|frame| {
-                            draw_background(frame, &info_process, info_all.get_count() - 1, index);
-                            info_all.draw_info_map_with_diff(frame, index);
-                        })?;
-                    }
-                }
-
-                if key.code == KeyCode::Char('d') {
-                    diff = !diff;
-                    if index == 0 {
-                        terminal.draw(|frame| {
-                            draw_background(frame, &info_process, info_all.get_count() - 1, index);
-                            info_all.draw_info_map(frame, index);
-                        })?;
-                    } else if diff == false {
-                        terminal.draw(|frame| {
-                            draw_background(frame, &info_process, info_all.get_count() - 1, index);
-                            info_all.draw_info_map(frame, index);
-                        })?;
-                    } else if diff == true {
-                        terminal.draw(|frame| {
-                            draw_background(frame, &info_process, info_all.get_count() - 1, index);
-                            info_all.draw_info_map_with_diff(frame, index);
-                        })?;
-                    }
-                }
-            }
+        if info_all.get_count() > 0 {
+            init = true;
+            terminal.draw(|frame| {
+                draw_background(frame, &info_process, info_all.get_count() - 1, index);
+                info_all.draw_info_map(frame, index);
+            })?;
         }
-        std::thread::sleep(Duration::from_millis(100));
+    }
+
+    let info_clone_2 = Arc::clone(&info);
+
+    let handle1 = std::thread::spawn(move || -> std::io::Result<()> {
+        event_handler(info_clone_2, index, terminal, info_process)
+    });
+
+    match handle1.join() {
+        Ok(value) => match value {
+            Ok(()) => {}
+            Err(e) => eprintln!("{}", e),
+        },
+        Err(e) => eprintln!("{:?}", e),
     }
 
     ratatui::restore();

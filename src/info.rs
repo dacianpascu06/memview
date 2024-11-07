@@ -1,6 +1,8 @@
 use std::fs::File;
 use std::io;
 use std::io::{BufRead, BufReader, Read, Seek, SeekFrom};
+use std::sync::{Arc, Mutex};
+use std::time::Duration;
 
 use crate::aux::*;
 use crate::error::InfoErr;
@@ -47,20 +49,15 @@ impl InfoAll {
 
     pub fn draw_info_map(&self, frame: &mut Frame, index: usize) {
         let text = Paragraph::new(self.memory_map[index].to_string())
-            .block(Block::new().padding(Padding::new(
-                frame.area().width / 2 - 24, // left
-                0,                           // right
-                2,                           // top
-                0,                           // bottom
-            )))
+            .block(Block::new().padding(Padding::new(frame.area().width / 2 - 24, 0, 2, 0)))
             .alignment(Alignment::Left);
 
         let vertical_chunks = Layout::default()
             .direction(Direction::Vertical)
             .constraints([
-                Constraint::Length(4), // Top padding (2 lines)
-                Constraint::Min(0),    // Centered area
-                Constraint::Length(4), // Bottom padding (2 lines)
+                Constraint::Length(4),
+                Constraint::Min(0),
+                Constraint::Length(4),
             ])
             .split(frame.area());
 
@@ -102,24 +99,18 @@ impl InfoAll {
         let vertical_chunks = Layout::default()
             .direction(Direction::Vertical)
             .constraints([
-                Constraint::Length(4), // Top padding (2 lines)
-                Constraint::Min(0),    // Centered area
-                Constraint::Length(4), // Bottom padding (2 lines)
+                Constraint::Length(4),
+                Constraint::Min(0),
+                Constraint::Length(4),
             ])
             .split(frame.area());
 
         let centered_area = vertical_chunks[1];
 
         let output_text = Paragraph::new(output_text)
-            .block(Block::new().padding(Padding::new(
-                frame.area().width / 2 - 24, // left
-                0,                           // right
-                2,                           // top
-                0,                           // bottom
-            )))
+            .block(Block::new().padding(Padding::new(frame.area().width / 2 - 24, 0, 2, 0)))
             .alignment(Alignment::Left);
 
-        //frame.render_widget(Clear, vertical_chunks[1]);
         frame.render_widget(output_text, centered_area);
     }
 }
@@ -218,11 +209,13 @@ pub fn get_info_map(info_all: &mut InfoAll, pid: &sysinfo::Pid) -> Result<State,
         let line = line.map_err(|_| InfoErr::LineErr)?;
         let parts: Vec<&str> = line.split_whitespace().collect();
 
-        let (start_addr, mut end_addr) =
-            parts[INDEX_ADDRESS].split_at(parts[INDEX_ADDRESS].find("-").expect("- was not found"));
+        let (start_addr, mut end_addr) = parts[INDEX_ADDRESS]
+            .split_at(parts[INDEX_ADDRESS].find("-").expect("Address fmt error!"));
+
         end_addr = end_addr.trim_start_matches("-");
-        let start_addr_u64 = u64::from_str_radix(start_addr, 16).expect("invalid address");
-        let end_addr_u64 = u64::from_str_radix(end_addr, 16).expect("invalid address");
+        let start_addr_u64 =
+            u64::from_str_radix(start_addr, 16).map_err(|_| InfoErr::AddrFmtErr)?;
+        let end_addr_u64 = u64::from_str_radix(end_addr, 16).map_err(|_| InfoErr::AddrFmtErr)?;
         let rounded_dif = ((end_addr_u64 - start_addr_u64 + page_size - 1) / page_size) * page_size;
 
         total_size = total_size + rounded_dif;
@@ -274,7 +267,6 @@ pub fn get_info_map(info_all: &mut InfoAll, pid: &sysinfo::Pid) -> Result<State,
     if info_all.count > 1 {
         let curr_map = &info_all.memory_map[info_all.count - 1];
         let prev_map = &info_all.memory_map[info_all.count - 2];
-
         if prev_map == curr_map {
             info_all.memory_map.remove(info_all.count - 1);
             info_all.count -= 1;
@@ -283,10 +275,26 @@ pub fn get_info_map(info_all: &mut InfoAll, pid: &sysinfo::Pid) -> Result<State,
             Ok(State::Changed)
         }
     } else if info_all.count == 1 {
-        // info_count = 1 => init
         Ok(State::Initial)
     } else {
         Err(InfoErr::StoppedErr)
+    }
+}
+
+pub fn refresh(info_all: Arc<Mutex<InfoAll>>, pid: sysinfo::Pid) {
+    loop {
+        std::thread::sleep(Duration::from_secs(1));
+        let info_guard = info_all.lock();
+        let mut info;
+        match info_guard {
+            Ok(value) => info = value,
+            Err(_) => continue,
+        }
+        let output = get_info_map(&mut info, &pid);
+        match output {
+            Err(_) => {}
+            _ => {}
+        }
     }
 }
 
@@ -313,7 +321,6 @@ fn virt_to_phys(pid: u32, vaddr: u64, page_size: u64) -> io::Result<u64> {
             "Page not present in memory",
         ));
     }
-
     let pfn = entry & ((1 << 55) - 1);
 
     let phys_addr = (pfn * page_size as u64) + (vaddr % page_size as u64);

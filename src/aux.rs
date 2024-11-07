@@ -19,7 +19,7 @@ pub fn get_page_size() -> Result<u64, crate::error::InfoErr> {
     Ok(page_size as u64)
 }
 
-pub fn parse_info_proc(info_process: &String) -> Line<'_> {
+pub fn parse_info_proc(info_process: &'static str) -> Line<'_> {
     let info_proc: Vec<String> = info_process
         .split_whitespace()
         .map(|s| s.to_string())

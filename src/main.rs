@@ -11,6 +11,7 @@ mod aux;
 mod error;
 mod info;
 mod pid;
+mod ui;
 
 #[derive(Parser)]
 struct Cli {

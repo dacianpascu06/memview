@@ -12,8 +12,8 @@ use crate::ui::event::event_handler;
 pub fn run(info_proc: String, pid: sysinfo::Pid) -> std::io::Result<()> {
     let mut terminal = ratatui::init();
 
-    let info_process_clone: &'static str = Box::leak(info_proc.clone().into_boxed_str());
-    let info_process = parse_info_proc(&info_process_clone);
+    let info_process_static: &'static str = Box::leak(info_proc.clone().into_boxed_str());
+    let info_process = parse_info_proc(&info_process_static);
 
     let mut err = error::InfoErr::None;
     let index: usize = 0;
@@ -32,28 +32,23 @@ pub fn run(info_proc: String, pid: sysinfo::Pid) -> std::io::Result<()> {
     // makes sure that one refresh has already occured and the first pmap result is succesful
     let mut init = false;
     while init == false {
-        let info_all_clone = Arc::clone(&info);
-        let info_all_guard = info_all_clone.lock();
-        let info_all;
-
-        match info_all_guard {
-            Ok(value) => info_all = value,
+        match (*info).lock() {
+            Ok(info_state) => {
+                if info_state.get_count() > 0 {
+                    init = true;
+                    terminal.draw(|frame| {
+                        draw_background(frame, &info_process, info_state.get_count() - 1, index);
+                        draw_info_map(&info_state, frame, index);
+                    })?;
+                }
+            }
             Err(_) => continue,
-        }
-
-        if info_all.get_count() > 0 {
-            init = true;
-            terminal.draw(|frame| {
-                draw_background(frame, &info_process, info_all.get_count() - 1, index);
-                draw_info_map(&info_all, frame, index);
-            })?;
         }
     }
 
-    let info_clone_2 = Arc::clone(&info);
-
+    let info_clone = Arc::clone(&info);
     let handle1 = std::thread::spawn(move || -> Result<(), InfoErr> {
-        event_handler(info_clone_2, index, terminal, info_process, receiver_event)
+        event_handler(info_clone, index, terminal, info_process, receiver_event)
     });
 
     match handle1.join() {

@@ -28,19 +28,21 @@ where
         }
         if event::poll(Duration::from_millis(16)).map_err(|_| InfoErr::EventErr)? {
             if let Event::Key(key) = event::read().map_err(|_| InfoErr::EventErr)? {
+                // quit
                 if key.code == KeyCode::Char('q') {
                     break Ok(());
                 }
-                let info_all_clone = Arc::clone(&info);
-                let info_all_guard = info_all_clone.lock();
-                let info_all;
-                match info_all_guard {
-                    Ok(value) => info_all = value,
+
+                let info_state;
+                match (*info).lock() {
+                    Ok(state) => info_state = state,
                     Err(_) => continue,
                 }
+
+                // next
                 if key.code == KeyCode::Char('n') {
-                    if index == info_all.get_count() - 1 || index == info_all.get_count() - 2 {
-                        index = info_all.get_count() - 1;
+                    if index == info_state.get_count() - 1 || index == info_state.get_count() - 2 {
+                        index = info_state.get_count() - 1;
                     } else {
                         index = index + 1;
                     }
@@ -50,10 +52,10 @@ where
                                 draw_background(
                                     frame,
                                     &info_process,
-                                    info_all.get_count() - 1,
+                                    info_state.get_count() - 1,
                                     index,
                                 );
-                                draw_info_map(&info_all, frame, index);
+                                draw_info_map(&info_state, frame, index);
                             })
                             .map_err(|_| InfoErr::DrawErr)?;
                     } else if diff == true {
@@ -62,14 +64,16 @@ where
                                 draw_background(
                                     frame,
                                     &info_process,
-                                    info_all.get_count() - 1,
+                                    info_state.get_count() - 1,
                                     index,
                                 );
-                                draw_info_map_with_diff(&info_all, frame, index);
+                                draw_info_map_with_diff(&info_state, frame, index);
                             })
                             .map_err(|_| InfoErr::DrawErr)?;
                     }
                 }
+
+                // previous
                 if key.code == KeyCode::Char('p') {
                     if index == 0 || index == 1 {
                         terminal
@@ -78,10 +82,10 @@ where
                                 draw_background(
                                     frame,
                                     &info_process,
-                                    info_all.get_count() - 1,
+                                    info_state.get_count() - 1,
                                     index,
                                 );
-                                draw_info_map(&info_all, frame, index);
+                                draw_info_map(&info_state, frame, index);
                             })
                             .map_err(|_| InfoErr::DrawErr)?;
                     } else {
@@ -92,10 +96,10 @@ where
                                     draw_background(
                                         frame,
                                         &info_process,
-                                        info_all.get_count() - 1,
+                                        info_state.get_count() - 1,
                                         index,
                                     );
-                                    draw_info_map(&info_all, frame, index);
+                                    draw_info_map(&info_state, frame, index);
                                 })
                                 .map_err(|_| InfoErr::DrawErr)?;
                         } else {
@@ -104,15 +108,17 @@ where
                                     draw_background(
                                         frame,
                                         &info_process,
-                                        info_all.get_count() - 1,
+                                        info_state.get_count() - 1,
                                         index,
                                     );
-                                    draw_info_map_with_diff(&info_all, frame, index);
+                                    draw_info_map_with_diff(&info_state, frame, index);
                                 })
                                 .map_err(|_| InfoErr::DrawErr)?;
                         }
                     }
                 }
+
+                // refresh
                 if key.code == KeyCode::Char('r') {
                     if index == 0 {
                         terminal
@@ -120,10 +126,10 @@ where
                                 draw_background(
                                     frame,
                                     &info_process,
-                                    info_all.get_count() - 1,
+                                    info_state.get_count() - 1,
                                     index,
                                 );
-                                draw_info_map(&info_all, frame, index);
+                                draw_info_map(&info_state, frame, index);
                             })
                             .map_err(|_| InfoErr::DrawErr)?;
                     } else if diff == false {
@@ -132,10 +138,10 @@ where
                                 draw_background(
                                     frame,
                                     &info_process,
-                                    info_all.get_count() - 1,
+                                    info_state.get_count() - 1,
                                     index,
                                 );
-                                draw_info_map(&info_all, frame, index);
+                                draw_info_map(&info_state, frame, index);
                             })
                             .map_err(|_| InfoErr::DrawErr)?;
                     } else {
@@ -144,15 +150,16 @@ where
                                 draw_background(
                                     frame,
                                     &info_process,
-                                    info_all.get_count() - 1,
+                                    info_state.get_count() - 1,
                                     index,
                                 );
-                                draw_info_map_with_diff(&info_all, frame, index);
+                                draw_info_map_with_diff(&info_state, frame, index);
                             })
                             .map_err(|_| InfoErr::DrawErr)?;
                     }
                 }
 
+                // Toggle diff
                 if key.code == KeyCode::Char('d') {
                     diff = !diff;
                     if index == 0 {
@@ -161,10 +168,10 @@ where
                                 draw_background(
                                     frame,
                                     &info_process,
-                                    info_all.get_count() - 1,
+                                    info_state.get_count() - 1,
                                     index,
                                 );
-                                draw_info_map(&info_all, frame, index);
+                                draw_info_map(&info_state, frame, index);
                             })
                             .map_err(|_| InfoErr::DrawErr)?;
                     } else if diff == false {
@@ -173,10 +180,10 @@ where
                                 draw_background(
                                     frame,
                                     &info_process,
-                                    info_all.get_count() - 1,
+                                    info_state.get_count() - 1,
                                     index,
                                 );
-                                draw_info_map(&info_all, frame, index);
+                                draw_info_map(&info_state, frame, index);
                             })
                             .map_err(|_| InfoErr::DrawErr)?;
                     } else if diff == true {
@@ -185,29 +192,43 @@ where
                                 draw_background(
                                     frame,
                                     &info_process,
-                                    info_all.get_count() - 1,
+                                    info_state.get_count() - 1,
                                     index,
                                 );
-                                draw_info_map_with_diff(&info_all, frame, index);
+                                draw_info_map_with_diff(&info_state, frame, index);
                             })
                             .map_err(|_| InfoErr::DrawErr)?;
                     }
                 }
+
+                // go to start
                 if key.code == KeyCode::Char('s') {
                     index = 0;
                     terminal
                         .draw(|frame| {
-                            draw_background(frame, &info_process, info_all.get_count() - 1, index);
-                            draw_info_map(&info_all, frame, index);
+                            draw_background(
+                                frame,
+                                &info_process,
+                                info_state.get_count() - 1,
+                                index,
+                            );
+                            draw_info_map(&info_state, frame, index);
                         })
                         .map_err(|_| InfoErr::DrawErr)?;
                 }
+
+                // go to end
                 if key.code == KeyCode::Char('e') {
-                    index = info_all.get_count() - 1;
+                    index = info_state.get_count() - 1;
                     terminal
                         .draw(|frame| {
-                            draw_background(frame, &info_process, info_all.get_count() - 1, index);
-                            draw_info_map(&info_all, frame, index);
+                            draw_background(
+                                frame,
+                                &info_process,
+                                info_state.get_count() - 1,
+                                index,
+                            );
+                            draw_info_map(&info_state, frame, index);
                         })
                         .map_err(|_| InfoErr::DrawErr)?;
                 }

@@ -104,7 +104,7 @@ impl std::fmt::Display for InfoMemorySegment {
     }
 }
 
-pub fn get_info_map(info_all: &mut Info, pid: &sysinfo::Pid) -> Result<(), InfoErr> {
+pub fn update_info_map(info_all: &mut Info, pid: &sysinfo::Pid) -> Result<(), InfoErr> {
     let file: File;
     let mut total_size: u64 = 0;
     let f = get_proc_maps_file(&pid);
@@ -179,8 +179,7 @@ pub fn get_info_map(info_all: &mut Info, pid: &sysinfo::Pid) -> Result<(), InfoE
 
     // add total size
     total_size = ((total_size + page_size - 1) / page_size) * page_size;
-    let formatted_line_size = format!("{:<16} {:>6} \n", "total", format_byte_size(total_size),);
-    curr_map.size_total = formatted_line_size;
+    curr_map.size_total = format!("{:<16} {:>6} \n", "total", format_byte_size(total_size),);
 
     if info_all.count > 1 {
         let curr_map = &info_all.memory_map[info_all.count - 1];
@@ -203,7 +202,7 @@ pub fn refresh(info_all: Arc<Mutex<Info>>, pid: sysinfo::Pid, sender: Sender<Inf
             Ok(value) => info = value,
             Err(_) => continue,
         }
-        let output = get_info_map(&mut info, &pid);
+        let output = update_info_map(&mut info, &pid);
         match output {
             Err(e) => {
                 let mut attempts = 0;
@@ -215,6 +214,9 @@ pub fn refresh(info_all: Arc<Mutex<Info>>, pid: sysinfo::Pid, sender: Sender<Inf
                         }
                         Ok(()) => break,
                     }
+                }
+                if attempts == 5 {
+                    break;
                 }
             }
             _ => {}

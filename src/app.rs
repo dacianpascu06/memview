@@ -6,6 +6,7 @@ use error::InfoErr;
 use std::sync::{Arc, Mutex};
 
 use crate::ui::background::draw_background;
+use crate::ui::draw::*;
 use crate::ui::event::event_handler;
 
 pub fn run(info_proc: String, pid: sysinfo::Pid) -> std::io::Result<()> {
@@ -17,7 +18,7 @@ pub fn run(info_proc: String, pid: sysinfo::Pid) -> std::io::Result<()> {
     let mut err = error::InfoErr::None;
     let index: usize = 0;
 
-    let info = Arc::new(Mutex::new(InfoAll::new(pid.as_u32())));
+    let info = Arc::new(Mutex::new(Info::new(pid.as_u32())));
 
     let info_clone = Arc::clone(&info);
 
@@ -44,7 +45,7 @@ pub fn run(info_proc: String, pid: sysinfo::Pid) -> std::io::Result<()> {
             init = true;
             terminal.draw(|frame| {
                 draw_background(frame, &info_process, info_all.get_count() - 1, index);
-                info_all.draw_info_map(frame, index);
+                draw_info_map(&info_all, frame, index);
             })?;
         }
     }

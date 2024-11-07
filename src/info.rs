@@ -1,6 +1,5 @@
 use std::fs::File;
-use std::io;
-use std::io::{BufRead, BufReader, Read, Seek, SeekFrom};
+use std::io::{BufRead, BufReader};
 use std::sync::mpsc::Sender;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -9,114 +8,32 @@ use crate::aux::*;
 use crate::error::InfoErr;
 use crate::pid::get_proc_maps_file;
 
-use ratatui::{
-    layout::{Alignment, Constraint, Direction, Layout},
-    style::Stylize,
-    text::{Line, Text},
-    widgets::{Block, Padding, Paragraph},
-    Frame,
-};
-
 const LENGTH_NO_PATH: usize = 5;
 const LENGTH_WITH_PATH: usize = 6;
 const INDEX_PERMISSION: usize = 1;
 const INDEX_ADDRESS: usize = 0;
 const INDEX_PATH: usize = 5;
 
-pub enum State {
-    Initial,
-    Changed,
-    NotChanged,
-}
-
 #[derive(Debug)]
-pub struct InfoAll {
-    memory_map: Vec<InfoMemoryMap>,
+pub struct Info {
+    pub memory_map: Vec<InfoMemoryMap>,
     count: usize,
     pid: u32,
 }
-impl InfoAll {
+impl Info {
     pub fn new(pid: u32) -> Self {
-        InfoAll {
+        Info {
             memory_map: Vec::new(),
             count: 0,
             pid,
         }
     }
-
     pub fn get_count(&self) -> usize {
         self.count
     }
-
-    pub fn draw_info_map(&self, frame: &mut Frame, index: usize) {
-        let text = Paragraph::new(self.memory_map[index].to_string())
-            .block(Block::new().padding(Padding::new(frame.area().width / 2 - 24, 0, 2, 0)))
-            .alignment(Alignment::Left);
-
-        let vertical_chunks = Layout::default()
-            .direction(Direction::Vertical)
-            .constraints([
-                Constraint::Length(4),
-                Constraint::Min(0),
-                Constraint::Length(4),
-            ])
-            .split(frame.area());
-
-        let centered_area = vertical_chunks[1];
-        frame.render_widget(text, centered_area);
-    }
-
-    pub fn draw_info_map_with_diff(&self, frame: &mut Frame, index: usize) {
-        let mut output_text: Text = Default::default();
-        let prev_map = &self.memory_map[index - 1];
-        let curr_map = &self.memory_map[index];
-
-        for diff in diff::lines(&prev_map.to_string(), &curr_map.to_string()) {
-            match diff {
-                diff::Result::Left(l) => {
-                    output_text.push_line(
-                        Line::from(format!("{}{}", "-", l))
-                            .red()
-                            .alignment(ratatui::layout::Alignment::Left),
-                    );
-                }
-                diff::Result::Both(l, _) => {
-                    output_text.push_line(
-                        Line::from(format!("{}", l))
-                            .white()
-                            .alignment(ratatui::layout::Alignment::Left),
-                    );
-                }
-                diff::Result::Right(r) => {
-                    output_text.push_line(
-                        Line::from(format!("{}{}", "+", r))
-                            .green()
-                            .alignment(ratatui::layout::Alignment::Left),
-                    );
-                }
-            }
-        }
-
-        let vertical_chunks = Layout::default()
-            .direction(Direction::Vertical)
-            .constraints([
-                Constraint::Length(4),
-                Constraint::Min(0),
-                Constraint::Length(4),
-            ])
-            .split(frame.area());
-
-        let centered_area = vertical_chunks[1];
-
-        let output_text = Paragraph::new(output_text)
-            .block(Block::new().padding(Padding::new(frame.area().width / 2 - 24, 0, 2, 0)))
-            .alignment(Alignment::Left);
-
-        frame.render_widget(output_text, centered_area);
-    }
 }
 
-impl std::fmt::Display for InfoAll {
+impl std::fmt::Display for Info {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         for map in self.memory_map.iter() {
             write!(f, "{}", map)?;
@@ -187,7 +104,7 @@ impl std::fmt::Display for InfoMemorySegment {
     }
 }
 
-pub fn get_info_map(info_all: &mut InfoAll, pid: &sysinfo::Pid) -> Result<State, InfoErr> {
+pub fn get_info_map(info_all: &mut Info, pid: &sysinfo::Pid) -> Result<(), InfoErr> {
     let file: File;
     let mut total_size: u64 = 0;
     let f = get_proc_maps_file(&pid);
@@ -271,18 +188,13 @@ pub fn get_info_map(info_all: &mut InfoAll, pid: &sysinfo::Pid) -> Result<State,
         if prev_map == curr_map {
             info_all.memory_map.remove(info_all.count - 1);
             info_all.count -= 1;
-            Ok(State::NotChanged)
-        } else {
-            Ok(State::Changed)
         }
-    } else if info_all.count == 1 {
-        Ok(State::Initial)
-    } else {
-        Err(InfoErr::StoppedErr)
     }
+
+    Ok(())
 }
 
-pub fn refresh(info_all: Arc<Mutex<InfoAll>>, pid: sysinfo::Pid, sender: Sender<InfoErr>) {
+pub fn refresh(info_all: Arc<Mutex<Info>>, pid: sysinfo::Pid, sender: Sender<InfoErr>) {
     loop {
         std::thread::sleep(Duration::from_secs(1));
         let info_guard = info_all.lock();
@@ -308,33 +220,4 @@ pub fn refresh(info_all: Arc<Mutex<InfoAll>>, pid: sysinfo::Pid, sender: Sender<
             _ => {}
         }
     }
-}
-
-fn virt_to_phys(pid: u32, vaddr: u64, page_size: u64) -> io::Result<u64> {
-    let path = format!("/proc/{}/pagemap", pid);
-    let mut pagemap = File::open(path)?;
-
-    const PAGEMAP_ENTRY_SIZE: u64 = 8;
-
-    let vpn = vaddr / page_size;
-    let offset = vpn * PAGEMAP_ENTRY_SIZE;
-
-    pagemap.seek(SeekFrom::Start(offset))?;
-
-    let mut entry = [0u8; 8];
-    pagemap.read_exact(&mut entry)?;
-
-    let entry = u64::from_le_bytes(entry);
-
-    let present = entry & (1 << 63) != 0;
-    if !present {
-        return Err(io::Error::new(
-            io::ErrorKind::Other,
-            "Page not present in memory",
-        ));
-    }
-    let pfn = entry & ((1 << 55) - 1);
-
-    let phys_addr = (pfn * page_size as u64) + (vaddr % page_size as u64);
-    Ok(phys_addr)
 }

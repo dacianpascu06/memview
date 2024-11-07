@@ -1,7 +1,11 @@
+use std::fs::File;
+use std::io::{Read, Seek, SeekFrom};
+
 use ratatui::{
     style::{Color, Style},
     text::{Line, Span},
 };
+
 pub fn format_byte_size(size: u64) -> String {
     const KB: u64 = 1024;
     if size < KB {
@@ -42,4 +46,33 @@ pub fn parse_info_proc(info_process: &'static str) -> Line<'_> {
         " : ".into(),
         out_pid_value,
     ])
+}
+
+pub fn virt_to_phys(pid: u32, vaddr: u64, page_size: u64) -> std::io::Result<u64> {
+    let path = format!("/proc/{}/pagemap", pid);
+    let mut pagemap = File::open(path)?;
+
+    const PAGEMAP_ENTRY_SIZE: u64 = 8;
+
+    let vpn = vaddr / page_size;
+    let offset = vpn * PAGEMAP_ENTRY_SIZE;
+
+    pagemap.seek(SeekFrom::Start(offset))?;
+
+    let mut entry = [0u8; 8];
+    pagemap.read_exact(&mut entry)?;
+
+    let entry = u64::from_le_bytes(entry);
+
+    let present = entry & (1 << 63) != 0;
+    if !present {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::Other,
+            "Page not present in memory",
+        ));
+    }
+    let pfn = entry & ((1 << 55) - 1);
+
+    let phys_addr = (pfn * page_size as u64) + (vaddr % page_size as u64);
+    Ok(phys_addr)
 }

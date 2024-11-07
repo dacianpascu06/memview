@@ -3,15 +3,16 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use crate::error::InfoErr;
-use crate::InfoAll;
+use crate::Info;
 
 use crossterm::event::{self, Event, KeyCode};
 use ratatui::{prelude::CrosstermBackend, text::Line, Terminal};
 
-use crate::ui::background::draw_background;
+use super::background::draw_background;
+use super::draw::*;
 
 pub fn event_handler<B>(
-    info: Arc<Mutex<InfoAll>>,
+    info: Arc<Mutex<Info>>,
     mut index: usize,
     mut terminal: Terminal<CrosstermBackend<B>>,
     info_process: Line<'_>,
@@ -52,7 +53,7 @@ where
                                     info_all.get_count() - 1,
                                     index,
                                 );
-                                info_all.draw_info_map(frame, index);
+                                draw_info_map(&info_all, frame, index);
                             })
                             .map_err(|_| InfoErr::DrawErr)?;
                     } else if diff == true {
@@ -64,7 +65,7 @@ where
                                     info_all.get_count() - 1,
                                     index,
                                 );
-                                info_all.draw_info_map_with_diff(frame, index);
+                                draw_info_map_with_diff(&info_all, frame, index);
                             })
                             .map_err(|_| InfoErr::DrawErr)?;
                     }
@@ -80,7 +81,7 @@ where
                                     info_all.get_count() - 1,
                                     index,
                                 );
-                                info_all.draw_info_map(frame, index);
+                                draw_info_map(&info_all, frame, index);
                             })
                             .map_err(|_| InfoErr::DrawErr)?;
                     } else {
@@ -94,7 +95,7 @@ where
                                         info_all.get_count() - 1,
                                         index,
                                     );
-                                    info_all.draw_info_map(frame, index);
+                                    draw_info_map(&info_all, frame, index);
                                 })
                                 .map_err(|_| InfoErr::DrawErr)?;
                         } else {
@@ -106,7 +107,7 @@ where
                                         info_all.get_count() - 1,
                                         index,
                                     );
-                                    info_all.draw_info_map_with_diff(frame, index);
+                                    draw_info_map_with_diff(&info_all, frame, index);
                                 })
                                 .map_err(|_| InfoErr::DrawErr)?;
                         }
@@ -122,7 +123,7 @@ where
                                     info_all.get_count() - 1,
                                     index,
                                 );
-                                info_all.draw_info_map(frame, index);
+                                draw_info_map(&info_all, frame, index);
                             })
                             .map_err(|_| InfoErr::DrawErr)?;
                     } else if diff == false {
@@ -134,7 +135,7 @@ where
                                     info_all.get_count() - 1,
                                     index,
                                 );
-                                info_all.draw_info_map(frame, index);
+                                draw_info_map(&info_all, frame, index);
                             })
                             .map_err(|_| InfoErr::DrawErr)?;
                     } else {
@@ -146,7 +147,7 @@ where
                                     info_all.get_count() - 1,
                                     index,
                                 );
-                                info_all.draw_info_map_with_diff(frame, index);
+                                draw_info_map_with_diff(&info_all, frame, index);
                             })
                             .map_err(|_| InfoErr::DrawErr)?;
                     }
@@ -163,7 +164,7 @@ where
                                     info_all.get_count() - 1,
                                     index,
                                 );
-                                info_all.draw_info_map(frame, index);
+                                draw_info_map(&info_all, frame, index);
                             })
                             .map_err(|_| InfoErr::DrawErr)?;
                     } else if diff == false {
@@ -175,7 +176,7 @@ where
                                     info_all.get_count() - 1,
                                     index,
                                 );
-                                info_all.draw_info_map(frame, index);
+                                draw_info_map(&info_all, frame, index);
                             })
                             .map_err(|_| InfoErr::DrawErr)?;
                     } else if diff == true {
@@ -187,7 +188,7 @@ where
                                     info_all.get_count() - 1,
                                     index,
                                 );
-                                info_all.draw_info_map_with_diff(frame, index);
+                                draw_info_map_with_diff(&info_all, frame, index);
                             })
                             .map_err(|_| InfoErr::DrawErr)?;
                     }
@@ -197,7 +198,7 @@ where
                     terminal
                         .draw(|frame| {
                             draw_background(frame, &info_process, info_all.get_count() - 1, index);
-                            info_all.draw_info_map(frame, index);
+                            draw_info_map(&info_all, frame, index);
                         })
                         .map_err(|_| InfoErr::DrawErr)?;
                 }
@@ -206,7 +207,7 @@ where
                     terminal
                         .draw(|frame| {
                             draw_background(frame, &info_process, info_all.get_count() - 1, index);
-                            info_all.draw_info_map(frame, index);
+                            draw_info_map(&info_all, frame, index);
                         })
                         .map_err(|_| InfoErr::DrawErr)?;
                 }

@@ -1,6 +1,7 @@
 use std::fs::File;
 use std::io;
 use std::io::{BufRead, BufReader, Read, Seek, SeekFrom};
+use std::sync::mpsc::Sender;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
@@ -281,7 +282,7 @@ pub fn get_info_map(info_all: &mut InfoAll, pid: &sysinfo::Pid) -> Result<State,
     }
 }
 
-pub fn refresh(info_all: Arc<Mutex<InfoAll>>, pid: sysinfo::Pid) {
+pub fn refresh(info_all: Arc<Mutex<InfoAll>>, pid: sysinfo::Pid, sender: Sender<InfoErr>) {
     loop {
         std::thread::sleep(Duration::from_secs(1));
         let info_guard = info_all.lock();
@@ -292,7 +293,18 @@ pub fn refresh(info_all: Arc<Mutex<InfoAll>>, pid: sysinfo::Pid) {
         }
         let output = get_info_map(&mut info, &pid);
         match output {
-            Err(_) => {}
+            Err(e) => {
+                let mut attempts = 0;
+                while attempts < 5 {
+                    match sender.send(e.clone()) {
+                        Err(_) => {
+                            attempts += 1;
+                            std::thread::sleep(Duration::from_millis(100));
+                        }
+                        Ok(()) => break,
+                    }
+                }
+            }
             _ => {}
         }
     }

@@ -1,5 +1,7 @@
 use super::*;
 use aux::parse_info_proc;
+use clap::error::Result;
+use error::InfoErr;
 
 use std::sync::{Arc, Mutex};
 
@@ -12,16 +14,18 @@ pub fn run(info_proc: String, pid: sysinfo::Pid) -> std::io::Result<()> {
     let info_process_clone: &'static str = Box::leak(info_proc.clone().into_boxed_str());
     let info_process = parse_info_proc(&info_process_clone);
 
-    let err = error::InfoErr::None;
+    let mut err = error::InfoErr::None;
     let index: usize = 0;
 
     let info = Arc::new(Mutex::new(InfoAll::new(pid.as_u32())));
 
     let info_clone = Arc::clone(&info);
 
+    let (sender_refr, receiver_event) = std::sync::mpsc::channel();
+
     // spawns thread that refreshes the state
     std::thread::spawn(move || {
-        refresh(info_clone, pid.clone());
+        refresh(info_clone, pid.clone(), sender_refr);
     });
 
     // makes sure that one refresh has already occured and the first pmap result is succesful
@@ -47,14 +51,14 @@ pub fn run(info_proc: String, pid: sysinfo::Pid) -> std::io::Result<()> {
 
     let info_clone_2 = Arc::clone(&info);
 
-    let handle1 = std::thread::spawn(move || -> std::io::Result<()> {
-        event_handler(info_clone_2, index, terminal, info_process)
+    let handle1 = std::thread::spawn(move || -> Result<(), InfoErr> {
+        event_handler(info_clone_2, index, terminal, info_process, receiver_event)
     });
 
     match handle1.join() {
         Ok(value) => match value {
             Ok(()) => {}
-            Err(e) => eprintln!("{}", e),
+            Err(e) => err = e,
         },
         Err(e) => eprintln!("{:?}", e),
     }

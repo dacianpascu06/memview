@@ -6,7 +6,7 @@ pub enum FileErr {
     ProcessErr,
 }
 
-#[derive(Error, Debug)]
+#[derive(Error, Debug, Copy, Clone)]
 pub enum InfoErr {
     #[error("Cannot parse line of proc/pid/maps!")]
     LineErr,
@@ -18,6 +18,10 @@ pub enum InfoErr {
     OutputErr,
     #[error("Process has stopped!")]
     StoppedErr,
+    #[error("Draw error!")]
+    DrawErr,
+    #[error("An event error has occured!")]
+    EventErr,
     #[error("")]
     None,
 }

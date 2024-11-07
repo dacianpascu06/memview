@@ -41,7 +41,13 @@ pub fn draw_background(
         .border_set(border::THICK);
 
     let empty_line = Line::from(vec!["".into()]);
-    let counter_text = Text::from(vec![empty_line, process.clone()]);
+    let legend = Line::from(vec!["Virt Addr | Phys Addr | Size | Perms | Path".into()]);
+    let counter_text = Text::from(vec![
+        empty_line.clone(),
+        process.clone(),
+        empty_line.clone(),
+        legend,
+    ]);
 
     let widget = Paragraph::new(counter_text).centered().block(block);
     frame.render_widget(widget, frame.area());

@@ -58,7 +58,7 @@ where
                                 draw_info_map(&info_state, frame, index);
                             })
                             .map_err(|_| InfoErr::DrawErr)?;
-                    } else if diff == true {
+                    } else if diff == true && index != 0 {
                         terminal
                             .draw(|frame| {
                                 draw_background(

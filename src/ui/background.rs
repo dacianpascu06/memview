@@ -12,7 +12,7 @@ pub fn draw_background(
     total_changes: usize,
     index: usize,
 ) {
-    let title = Line::from(" Enhanced PMAP".bold());
+    let title = Line::from(" MemView ".bold());
     let instructions = Line::from(vec![
         "go to start ".into(),
         "<s> ".blue().bold(),

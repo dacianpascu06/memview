@@ -26,8 +26,8 @@ pub fn parser() -> (String, sysinfo::Pid) {
             None => {
                 eprintln!("{}", "No arguments were given!".to_string().red());
                 eprintln!("Usage: ");
-                eprintln!("bpmap -n (process_name)");
-                eprintln!("bpmap (process_pid)");
+                eprintln!("memview -n (process_name)");
+                eprintln!("memview (process_pid)");
                 std::process::exit(1);
             }
             Some(p) => {
